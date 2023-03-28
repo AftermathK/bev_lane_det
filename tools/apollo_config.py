@@ -21,11 +21,11 @@ def get_camera_matrix(cam_pitch,cam_height):
     return proj_g2c,camera_K
 
 ''' data split '''
-train_json_paths = '/dataset/apollo/data_splits/standard/train.json'
-test_json_paths = '/dataset/apollo/data_splits/standard/test.json'
-data_base_path = '/dataset/apollo/Apollo_Sim_3D_Lane_Release'
+train_json_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/apollo-bev-lanedet/3D_Lane_Synthetic_Dataset/data_splits/standard/train.json'
+test_json_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/apollo-bev-lanedet/3D_Lane_Synthetic_Dataset/data_splits/standard/test.json'
+data_base_path = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/apollo-bev-lanedet/Apollo_Sim_3D_Lane_Release'
 
-model_save_path = "/dataset/model/apollo/"
+model_save_path = "/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det/apollo_checkpoints"
 
 input_shape = (576,1024)
 output_2d_shape = (144,256)

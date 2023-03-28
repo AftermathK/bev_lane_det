@@ -3,7 +3,10 @@ gpu_id = [0]
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([str(i) for i in gpu_id])
 import sys
-sys.path.append('/mnt/ve_perception/wangruihao/code/BEV-LaneDet')
+sys.path.append('/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det')
+
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 import shutil
 import numpy as np
 import json
@@ -18,10 +21,10 @@ from utils.util_val.val_offical import LaneEval
 from models.model.single_camera_bev import *
 
 
-model_path = '/share/wangruihao/data/apollo_data/apollo/20221114/ep149.pth' #model path of verification
+model_path = '/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det/checkpoints/latest.pth'
 
 ''' parameter from config '''
-config_file = './apollo_config.py'
+config_file = './tools/apollo_config.py'
 configs = load_config_module(config_file)
 test_json_paths = configs.test_json_paths
 x_range = configs.x_range
@@ -33,7 +36,7 @@ meter_per_pixel = configs.meter_per_pixel
 post_conf = 0.9 # Minimum confidence on the segmentation map for clustering
 post_emb_margin = 6.0 # embeding margin of different clusters
 post_min_cluster_size = 15 # The minimum number of points in a cluster
-tmp_save_path = '/mnt/ve_perception/wangruihao/tmp/tmp_apollo' #tmp path for save intermediate result
+tmp_save_path = '/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det/results' #tmp path for save intermediate result
 
 
 

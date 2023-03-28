@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/mnt/ve_perception/wangruihao/code/BEV-LaneDet')
+sys.path.append('/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det')
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
@@ -49,6 +49,7 @@ class Combine_Model_and_Loss(torch.nn.Module):
 
 
 def train_epoch(model, dataset, optimizer, configs, epoch):
+
     # Last iter as mean loss of whole epoch
     model.train()
     losses_avg = {}
@@ -56,6 +57,7 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
     for idx, (
     input_data, gt_seg_data, gt_emb_data, offset_y_data, z_data, image_gt_segment, image_gt_instance) in enumerate(
             dataset):
+
         # loss_back, loss_iter = forward_on_cuda(gpu, gt_data, input_data, loss, models)
         input_data = input_data.cuda()
         gt_seg_data = gt_seg_data.cuda()
@@ -64,6 +66,14 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
         z_data = z_data.cuda()
         image_gt_segment = image_gt_segment.cuda()
         image_gt_instance = image_gt_instance.cuda()
+        
+        # input_data: [8, 3, 576, 1024]
+        # gt_seg_data: [8, 1, 200, 48] (bev)
+        # gt_emb_data: [8, 1, 200, 48] (bev)
+        # offset_y_data: [8, 1, 200, 48] (bev)
+        # z_data: [8, 1, 200, 48] (bev)
+        # image_gt_segment: [8, 1, 144, 256] (image)
+        # image_gt_instance: [8, 1, 144, 256] (image)
         prediction, loss_total_bev, loss_total_2d, loss_offset, loss_z = model(input_data,
                                                                                 gt_seg_data,
                                                                                 gt_emb_data,
@@ -75,7 +85,7 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
         loss_offset = loss_offset.mean()
         loss_z = loss_z.mean()
         loss_back_total = loss_back_bev + 0.5 * loss_back_2d + loss_offset + loss_z
-        ''' caclute loss '''
+        ''' calcute loss '''
 
         optimizer.zero_grad()
         loss_back_total.backward()

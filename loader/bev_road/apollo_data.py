@@ -175,7 +175,7 @@ class Apollo_dataset_with_offset(Dataset):
             lane_ground = lane_ground[lane_visibility > 0.5]
             lane_ground = np.concatenate([lane_ground, np.ones([lane_ground.shape[0], 1])], axis=1).T
             # get image gt
-            lane_camera = np.matmul(project_g2c, lane_ground)
+            lane_camera = np.matmul(project_g2c, lane_ground) # (4, lane_size)
             lane_image = camera_k @ lane_camera[:3]
             lane_image = lane_image / lane_image[2]
             lane_uv = lane_image[:2].T
