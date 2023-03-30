@@ -22,8 +22,8 @@ def get_camera_matrix(cam_pitch,cam_height):
     return proj_g2c,camera_K
 
 ''' data split '''
-train_json_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
-test_json_paths = ''
+train_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
+test_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
 data_base_path = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/val'
 
 model_save_path = "/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det/breadcrumb_checkpoints"
@@ -76,15 +76,26 @@ def train_dataset():
                     A.Normalize(),
                     ToTensorV2()
                     ])
-    # train_data = Apollo_dataset_with_offset(train_json_paths, data_base_path, 
-    #                                           x_range, y_range, meter_per_pixel, 
-    #                                           train_trans, output_2d_shape, vc_config)
-    train_data = Generator(train_json_paths, data_base_path, 
+    train_data = Generator(train_txt_paths, data_base_path, 
                            x_range, y_range, meter_per_pixel, 
                            train_trans, output_2d_shape, vc_config)
 
     return train_data
 
+def test_dataset():
+    test_trans = A.Compose([
+                    A.Resize(height=input_shape[0], width=input_shape[1]),
+                    A.MotionBlur(p=0.2),
+                    A.RandomBrightnessContrast(),
+                    A.ColorJitter(p=0.1),
+                    A.Normalize(),
+                    ToTensorV2()
+                    ])
+    test_data = Generator(test_txt_paths, data_base_path, 
+                           x_range, y_range, meter_per_pixel, 
+                           test_trans, output_2d_shape, vc_config)
+
+    return test_data 
 
 def val_dataset():
     trans_image = A.Compose([

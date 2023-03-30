@@ -1,147 +1,170 @@
-import os
-gpu_id = [0]
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = ','.join([str(i) for i in gpu_id])
 import sys
 sys.path.append('/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det')
-
-from torch.utils.data import Dataset
+import torch
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
-import shutil
-import numpy as np
-import json
-import time
-from tqdm import tqdm
-
-from utils.config_util import load_config_module
+import torch.nn as nn
+from models.util.load_model import load_checkpoint, resume_training
+from models.util.save_model import save_model_dp
+from models.loss import IoULoss, NDPushPullLoss
 from models.util.load_model import load_model
 from models.util.cluster import embedding_post
 from models.util.post_process import bev_instance2points_with_offset_z
-from utils.util_val.val_offical import LaneEval
-from models.model.single_camera_bev import *
-
+from utils.config_util import load_config_module
+from sklearn.metrics import f1_score
+import numpy as np
 
 model_path = '/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det/breadcrumb_checkpoints/latest.pth'
 
 ''' parameter from config '''
 config_file = './tools/breadcrumbs_config.py'
 configs = load_config_module(config_file)
-test_json_paths = configs.test_json_paths
 x_range = configs.x_range
 y_range = configs.y_range
 meter_per_pixel = configs.meter_per_pixel
-
 
 '''Post-processing parameters '''
 post_conf = 0.9 # Minimum confidence on the segmentation map for clustering
 post_emb_margin = 6.0 # embeding margin of different clusters
 post_min_cluster_size = 15 # The minimum number of points in a cluster
-tmp_save_path = '/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det/results' #tmp path for save intermediate result
+
+class Eval_Model(torch.nn.Module):
+    def __init__(self, model):
+        super(Eval_Model, self).__init__()
+        self.model = model
+        self.bce = torch.nn.BCEWithLogitsLoss(pos_weight=torch.tensor([10.0]))
+        self.iou_loss = IoULoss()
+        self.poopoo = NDPushPullLoss(1.0, 1., 1.0, 5.0, 200)
+        self.mse_loss = nn.MSELoss()
+        self.bce_loss = nn.BCELoss()
+        # self.sigmoid = nn.Sigmoid()
+
+    def forward(self, inputs, gt_seg=None, gt_instance=None, gt_offset_y=None, gt_z=None, image_gt_segment=None,
+                image_gt_instance=None, train=False):
+        res = self.model(inputs)
+        pred, emb, offset_y, z = res[0]
+        pred_2d, emb_2d = res[1]
+        if train:
+            ## 3d
+            loss_seg = self.bce(pred, gt_seg) + self.iou_loss(torch.sigmoid(pred), gt_seg)
+            loss_emb = self.poopoo(emb, gt_instance)
+            loss_offset = self.bce_loss(gt_seg * torch.sigmoid(offset_y), gt_offset_y)
+            loss_z = self.mse_loss(gt_seg * z, gt_z)
+            loss_total = 3 * loss_seg + 0.5 * loss_emb
+            loss_total = loss_total.unsqueeze(0)
+            loss_offset = 60 * loss_offset.unsqueeze(0)
+            loss_z = 30 * loss_z.unsqueeze(0)
+            ## 2d
+            loss_seg_2d = self.bce(pred_2d, image_gt_segment) + self.iou_loss(torch.sigmoid(pred_2d), image_gt_segment)
+            loss_emb_2d = self.poopoo(emb_2d, image_gt_instance)
+            loss_total_2d = 3 * loss_seg_2d + 0.5 * loss_emb_2d
+            loss_total_2d = loss_total_2d.unsqueeze(0)
+            return pred, loss_total, loss_total_2d, loss_offset, loss_z
+        else:
+            return pred
 
 
+def test_epoch(model, dataset, optimizer, configs, epoch):
 
+    # Last iter as mean loss of whole epoch
+    model.eval()
 
-class PostProcessDataset(Dataset):
-    def __init__(self, model_res_save_path, postprocess_save_path,test_json_paths):
-        self.valid_data = os.listdir(model_res_save_path)
-        self.postprocess_save_path = postprocess_save_path
-        self.model_res_save_path = model_res_save_path
-        self.x_range = x_range
-        self.meter_per_pixel = meter_per_pixel
-        d_gt_res = {}
-        with open(test_json_paths, 'r') as f:
-            for i in f.readlines():
-                line_content = json.loads(i.strip())
-                # print('hah') #'raw_file', 'cam_height', 'cam_pitch', 'centerLines', 'laneLines', 'centerLines_visibility', 'laneLines_visibility'
-                lanes = []
-                for lane_idx in range(len(line_content['laneLines'])):
-                    lane_selected = np.array(line_content['laneLines'][lane_idx])[
-                        np.array(line_content['laneLines_visibility'][lane_idx]) > 0.5]
-                    lanes.append(lane_selected.tolist())
-                d_gt_res[line_content['raw_file']] = lanes
-        self.d_gt_res = d_gt_res
+    '''image,image_gt_segment,image_gt_instance,ipm_gt_segment,ipm_gt_instance'''
+    for idx, (
+    input_data, gt_seg_data, gt_emb_data, offset_y_data, z_data, image_gt_segment, image_gt_instance) in enumerate(
+            dataset):
 
-    def __len__(self):
-        return len(self.valid_data)
+        # loss_back, loss_iter = forward_on_cuda(gpu, gt_data, input_data, loss, models)
+        input_data = input_data.cuda()
+        gt_seg_data = gt_seg_data.cuda()
+        gt_emb_data = gt_emb_data.cuda()
+        offset_y_data = offset_y_data.cuda()
+        z_data = z_data.cuda()
+        image_gt_segment = image_gt_segment.cuda()
+        image_gt_instance = image_gt_instance.cuda()
+        
 
-    def __getitem__(self, item):
-        loaded = np.load(os.path.join(self.model_res_save_path, self.valid_data[item]))
-        prediction = (loaded[:, 0:1, :, :], loaded[:, 1:3, :, :])
-        offset_y = loaded[:, 3:4, :, :][0][0]
-        z_pred = loaded[:, 4:5, :, :][0][0]
-        files = self.valid_data[item].split('.')[0].split('__')
+        # input_data: [8, 3, 576, 1024]
+        # gt_seg_data: [8, 1, 200, 48] (bev)
+        # gt_emb_data: [8, 1, 200, 48] (bev)
+        # offset_y_data: [8, 1, 200, 48] (bev)
+        # z_data: [8, 1, 200, 48] (bev)
+        # image_gt_segment: [8, 1, 144, 256] (image)
+        # image_gt_instance: [8, 1, 144, 256] (image)
+        pred_ = model(input_data)[0] # first sample in batch, first element
+        seg = pred_[0].detach().cpu().numpy()
+        embedding = pred_[1].detach().cpu().numpy()
+        offset_y = torch.sigmoid(pred_[2]).detach().cpu().numpy()
+        z_pred = pred_[3].detach().cpu().numpy()
+
+        prediction = (seg, embedding) 
         canvas, ids = embedding_post(prediction, post_conf, emb_margin=post_emb_margin, min_cluster_size=post_min_cluster_size, canvas_color=False)
-        lines = bev_instance2points_with_offset_z(canvas, max_x=self.x_range[1],
-                                    meter_per_pixal=(self.meter_per_pixel, self.meter_per_pixel),offset_y=offset_y,Z=z_pred)
-        frame_lanes_pred = []
-        for lane in lines:
-            pred_in_persformer = np.array([-1*lane[1],lane[0],lane[2]])
-            y = np.linspace(min(pred_in_persformer[1]),max(pred_in_persformer[1]),40)
-            f_x = np.polyfit(pred_in_persformer[1],pred_in_persformer[0],3)
-            f_z = np.polyfit(pred_in_persformer[1], pred_in_persformer[2], 3)
-            pred_in_persformer = np.array([np.poly1d(f_x)(y),y,np.poly1d(f_z)(y)])
-            frame_lanes_pred.append(pred_in_persformer.T.tolist())
-        gt_key = 'images' + '/' + files[0] + '/' + files[1] + '.jpg'
-        frame_lanes_gt = self.d_gt_res[gt_key]
-        with open(os.path.join(self.postprocess_save_path, files[0]+'_'+files[1] + '.json'), 'w') as f1:
-            json.dump([frame_lanes_pred, frame_lanes_gt], f1)
-        return torch.zeros((3, 3))
+        offset_y = offset_y[0][0]
+        z_pred = z_pred[0][0]
+        lines = bev_instance2points_with_offset_z(canvas, max_x=x_range[1],
+                                meter_per_pixal=(meter_per_pixel, meter_per_pixel),offset_y=offset_y,Z=z_pred)
+
+        # prediction, loss_total_bev, loss_total_2d, loss_offset, loss_z = model(input_data,
+        #                                                                         gt_seg_data,
+        #                                                                         gt_emb_data,
+        #                                                                         offset_y_data, z_data,
+        #                                                                         image_gt_segment,
+        #                                                                         image_gt_instance)
+        # if idx % 300 == 0:
+        #     target = gt_seg_data.detach().cpu().numpy().ravel()
+        #     pred = torch.sigmoid(prediction).detach().cpu().numpy().ravel()
+        #     f1_bev_seg = f1_score((target > 0.5).astype(np.int64), (pred > 0.5).astype(np.int64), zero_division=1)
 
 
-def val():
+def worker_function(config_file, gpu_id, checkpoint_path=None):
+    print('use gpu ids is '+','.join([str(i) for i in gpu_id]))
+    configs = load_config_module(config_file)
+
+    ''' models and optimizer '''
     model = configs.model()
+    # model = Eval_Model(model)
     model = load_model(model,
                        model_path)
-    print(model_path)
-    model.cuda()
-    model.eval()
-    val_dataset = configs.val_dataset()
-    val_loader = DataLoader(dataset=val_dataset,
-                              batch_size=16,
-                              num_workers=8,
-                              shuffle=False)
-    ''' Make temporary storage files according to time '''
-    time1 = int(time.time()) # 
-    np_save_path = os.path.join(tmp_save_path, str(time1) + '_np')
-    os.makedirs(np_save_path, exist_ok=True)
-    res_save_path = os.path.join(tmp_save_path, str(time1) + '_result')
-    os.makedirs(res_save_path, exist_ok=True)
-    ''' get model result and save'''
-    for item in tqdm(val_loader):
-        image,bn_name = item
-        image = image.cuda()
-        with torch.no_grad():
-            pred_ = model(image)[0]
-            seg = pred_[0].detach().cpu()
-            embedding = pred_[1].detach().cpu()
-            offset_y = torch.sigmoid(pred_[2]).detach().cpu()
-            z_pred = pred_[3].detach().cpu()
-            for idx in range(seg.shape[0]):
-                ms, me, moffset, z = seg[idx].unsqueeze(0).numpy(), embedding[idx].unsqueeze(0).numpy(), offset_y[
-                    idx].unsqueeze(0).numpy(), z_pred[idx].unsqueeze(0).numpy()
-                tmp_res_for_save = np.concatenate((ms, me, moffset, z), axis=1)
-                save_path = os.path.join(np_save_path,
-                                         bn_name[0][idx] + '__' + bn_name[1][idx].replace('json', 'np'))
-                np.save(save_path, tmp_res_for_save)
-    ''' get postprocess result and save '''
-    postprocess = PostProcessDataset(np_save_path, res_save_path, test_json_paths)
-    postprocess_loader = DataLoader(dataset=postprocess,
-                                    batch_size=32,
-                                    num_workers=16,
-                                    shuffle=False)
-    for item in tqdm(postprocess_loader):
-        continue
-    ''' verification by official tools in Gen-LaneNet'''
-    lane_eval = LaneEval()
-    res_list = os.listdir(res_save_path)
-    for item in tqdm(res_list):
-        with open(os.path.join(res_save_path, item), 'r') as f:
-            res = json.load(f)
-        lane_eval.bench_all(res[0], res[1])
-    lane_eval.show()
-    shutil.rmtree(np_save_path)
-    shutil.rmtree(res_save_path)
+    if torch.cuda.is_available():
+        model = model.cuda()
+    model = torch.nn.DataParallel(model)
+    optimizer = configs.optimizer(filter(lambda p: p.requires_grad, model.parameters()), **configs.optimizer_params)
+    scheduler = getattr(configs, "scheduler", CosineAnnealingLR)(optimizer, configs.epochs)
+    if checkpoint_path:
+        if getattr(configs, "load_optimizer", True):
+            resume_training(checkpoint_path, model.module, optimizer, scheduler)
+        else:
+            load_checkpoint(checkpoint_path, model.module, None)
+
+    ''' dataset '''
+    # test_ds = getattr(configs, "test_dataset", None)
+    test_ds = configs.test_dataset()
+    # if Dataset is None:
+    #     Dataset = configs.training_dataset
+    # test_loader = DataLoader(Dataset(), **configs.loader_args, pin_memory=True)
+    test_loader = DataLoader(dataset=test_ds,
+                             batch_size=1,
+                             num_workers=8,
+                             shuffle=False)
 
 
+    ''' get validation '''
+    # if configs.with_validation:
+    #     val_dataset = Dataset(**configs.val_dataset_args)
+    #     val_loader = DataLoader(val_dataset, **configs.val_loader_args, pin_memory=True)
+    #     val_loss = getattr(configs, "val_loss", loss)
+    #     if eval_only:
+    #         loss_mean = val_dp(model, val_loader, val_loss)
+    #         print(loss_mean)
+    #         return
+
+    for epoch in range(configs.epochs):
+        print('*' * 100, epoch)
+        test_epoch(model, test_loader, optimizer, configs, epoch)
+
+
+# TODO template config file.
 if __name__ == '__main__':
-    val()
+    import warnings
+    warnings.filterwarnings("ignore")
+    worker_function('./tools/breadcrumbs_config.py', gpu_id=[0,1])
