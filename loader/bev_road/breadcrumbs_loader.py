@@ -196,14 +196,12 @@ class Generator(Dataset):
 
         # ------ TODO -------
         # caculate camera parameter
-        # cam_height, cam_pitch = info_dict['cam_height'], info_dict['cam_pitch']
         cam_height = 1.7860000133514404
         cam_pitch = 0.01768055371940136
         project_g2c, _ = self.get_camera_matrix(cam_pitch, cam_height)
         project_c2g = np.linalg.inv(project_g2c)
 
         # caculate point
-        # lane_grounds = info_dict['laneLines']
         image_gt = np.zeros(image.shape[:2], dtype=np.uint8)
         matrix_IPM2ego = IPM2ego_matrix(
             ipm_center=(int(self.x_range[1] / self.meter_per_pixel), int(self.y_range[1] / self.meter_per_pixel)),
@@ -214,13 +212,12 @@ class Generator(Dataset):
             lane_camera = np.concatenate([lane_camera, np.ones([lane_camera.shape[0], 1])], axis=1).T # (4, lane_size)
 
             # get image gt
-            # lane_camera = np.matmul(project_g2c, lane_ground)
+            lane_ground = np.matmul(project_c2g, lane_camera)
             lane_image = camera_k @ lane_camera[:3]
             lane_image = lane_image / lane_image[2]
             lane_uv = lane_image[:2].T
             cv2.polylines(image_gt, [lane_uv.astype(np.int)], False, lane_idx + 1, 3)
-            # x, y, z = lane_ground[1], -1 * lane_ground[0], lane_ground[2]
-            x, y, z = lane_camera[0], lane_camera[1], lane_camera[2]
+            x, y, z = lane_ground[1], -1 * lane_ground[0], lane_ground[2]
             ground_points = np.array([x, y])
             ipm_points = np.linalg.inv(matrix_IPM2ego[:, :2]) @ (
                         ground_points[:2] - matrix_IPM2ego[:, 2].reshape(2, 1))

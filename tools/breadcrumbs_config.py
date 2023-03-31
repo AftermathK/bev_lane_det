@@ -22,10 +22,11 @@ def get_camera_matrix(cam_pitch,cam_height):
     return proj_g2c,camera_K
 
 ''' data split '''
-train_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
-test_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
-data_base_path = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/val'
-
+# train_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
+# test_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
+train_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/labels-v3/train'
+test_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/labels-v3/test'
+data_base_path = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/train'
 model_save_path = "/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/bev_lane_det/breadcrumb_checkpoints"
 
 input_shape = (576,1024)
@@ -38,7 +39,7 @@ meter_per_pixel = 0.5 # grid size
 bev_shape = (int((x_range[1] - x_range[0]) / meter_per_pixel),int((y_range[1] - y_range[0]) / meter_per_pixel))
 
 loader_args = dict(
-    batch_size=8,
+    batch_size=12,
     num_workers=12,
     shuffle=True
 )
@@ -97,14 +98,14 @@ def test_dataset():
 
     return test_data 
 
-def val_dataset():
-    trans_image = A.Compose([
-        A.Resize(height=input_shape[0], width=input_shape[1]),
-        A.Normalize(),
-        ToTensorV2()])
-    val_data = Apollo_dataset_with_offset_val(test_json_paths,data_base_path,
-                                                trans_image,vc_config)
-    return val_data
+# def val_dataset():
+#     trans_image = A.Compose([
+#         A.Resize(height=input_shape[0], width=input_shape[1]),
+#         A.Normalize(),
+#         ToTensorV2()])
+#     val_data = Apollo_dataset_with_offset_val(test_json_paths,data_base_path,
+#                                                 trans_image,vc_config)
+#     return val_data
 
 
 

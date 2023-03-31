@@ -157,7 +157,7 @@ class KeypointLoader():
                         num_labels = f.readlines()[1].split(",")[-1][:-1]
 
                         # must have at least one label with valid keypoints
-                        if int(num_labels) > 0:
+                        if (int(num_labels) > 0) and ("ring_front_center" in file_path):
                             file_list.append(file_path)
 
         return file_list
