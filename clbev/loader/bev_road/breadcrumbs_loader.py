@@ -223,8 +223,8 @@ class Generator(Dataset):
 
         ego2cam = self.sample_data_loader.get_ego_SE3_cam(idx)
 
-        keypoints, class_ids = self.sample_data_loader.get_tusimple_kps()
-        keypoints_3d = self.sample_data_loader.get_3d_kps()
+        keypoints, class_ids, mask = self.sample_data_loader.get_tusimple_kps()
+        keypoints_3d = self.sample_data_loader.get_3d_kps(mask)
 
 
         # ------ TODO -------
