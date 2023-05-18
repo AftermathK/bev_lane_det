@@ -24,6 +24,9 @@ from av2.utils.typing import NDArrayByte
 from av2.map.lane_segment import LaneMarkType, LaneSegment
 from av2.utils.typing import NDArrayBool, NDArrayByte, NDArrayFloat, NDArrayInt
 from collections import namedtuple
+from tqdm import tqdm
+from copy import deepcopy
+import pickle
 
 # a label and all meta information
 Label = namedtuple( 'Label' , [
@@ -112,19 +115,33 @@ labels = [
     Label(  'license plate'        , -1 ,       -1 , 'vehicle'         , 7       , False        , True         , (  0,  0,142) ),
 ]
 
+def random_pick_generic(a, W):
+    L = W*(len(a)//W)
+    b = a[:L].reshape(-1,W)
+    idx = np.random.randint(0,b.shape[1], len(b))
+    out = b[np.arange(len(idx)), idx]
+    if len(a[L:])>0:
+        out = np.hstack([out, np.array([np.random.choice(a[L:])])])
+    return out
+
 
 class KeypointLoader():
     def __init__(self, labels_path, sensor_path, split, skip=10):
         self.dset_path = labels_path 
         self.sensor_path = sensor_path
         self.data_skip = skip
-        self.transforms = transforms
+        # self.transforms = transforms
         self.split = split
 
         # self.train = "train/" if train else "val/" #Validation set's sensor folder should be reorganized
         #Create a list of dataset files
-        self.dset_files = self.get_dataset_files(self.dset_path)
-        self.dset_files = self.dset_files[::skip] #Adding skip to avoid consecuitve frame of data
+        self.dset_files = None # self.get_dataset_files(self.dset_path)
+        with open('av2-cli-dataset.pkl', 'rb') as f:
+            self.dset_files = pickle.load(f)
+        
+        # with open('av2-cli-dataset.pkl', 'wb') as f:
+        #     pickle.dump(self.dset_files, f)
+        self.dset_files = random_pick_generic(np.array(self.dset_files), skip) # self.dset_files[::skip] #Adding skip to avoid consecuitve frame of data
         self.cam_params = {} # dictionary of camera parameters
         self.image_shape = (512, 256) #Sticking to PiNet
 
@@ -283,9 +300,12 @@ class KeypointLoader():
         file_list = []
         camera_params = {}
 
-        for root, _, files in os.walk(path):
+        i=0
+
+        for root, _, files in tqdm(os.walk(path)):
             for file in files:
                 if ".txt" in file:
+                    i+=1
                     file_path = os.path.join(root, file)
                     with open(file_path, "r") as f:
                         # for now ignore content without labels 
@@ -295,7 +315,6 @@ class KeypointLoader():
                         # if (int(num_labels) > 0) and ("ring_front_center" in file_path):
                         if int(num_labels) > 0:
                             file_list.append(file_path)
-
         return file_list
 
     def convert_to_simple(self, keypoints):
