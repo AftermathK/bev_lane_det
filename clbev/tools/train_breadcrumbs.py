@@ -124,6 +124,8 @@ def train_epoch(model, dataset, optimizer, epoch, rank):
                             "F1_BEV_seg": f1_bev_seg}
             # losses_show = loss_iter
             print(idx, loss_iter)
+        if multiGPU == True:
+            dist.barrier()
 
 
 def worker_function(rank, gpu_id, checkpoint_path=None):
@@ -188,4 +190,5 @@ if __name__ == '__main__':
             args=([0,1],),
             nprocs=torch.cuda.device_count(),
             join=True)
+    cleanup()
     # worker_function('./clbev/tools/breadcrumbs_config.py', gpu_id=[0,1])
