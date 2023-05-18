@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/CenterlineNetworks/clbev')
+sys.path.append('/home/centerline/cl_bev_lane_det/clbev')
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
@@ -11,6 +11,20 @@ from utils.config_util import load_config_module
 from sklearn.metrics import f1_score
 import numpy as np
 from torch.utils.tensorboard import SummaryWriter
+import torch.distributed as dist
+import torch.multiprocessing as mp
+import os
+from tools.breadcrumbs_config import *
+
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+
+    # initialize the process group
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+
+def cleanup():
+    dist.destroy_process_group()
 
 
 
@@ -51,7 +65,7 @@ class Combine_Model_and_Loss(torch.nn.Module):
             return pred
 
 
-def train_epoch(model, dataset, optimizer, configs, epoch):
+def train_epoch(model, dataset, optimizer, epoch, rank):
 
     # Last iter as mean loss of whole epoch
     model.train()
@@ -62,13 +76,13 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
             dataset):
 
         # loss_back, loss_iter = forward_on_cuda(gpu, gt_data, input_data, loss, models)
-        input_data = input_data.cuda()
-        gt_seg_data = gt_seg_data.cuda()
-        gt_emb_data = gt_emb_data.cuda()
-        offset_y_data = offset_y_data.cuda()
-        z_data = z_data.cuda()
-        image_gt_segment = image_gt_segment.cuda()
-        image_gt_instance = image_gt_instance.cuda()
+        input_data = input_data.to(rank) # .cuda()
+        gt_seg_data = gt_seg_data.to(rank)
+        gt_emb_data = gt_emb_data.to(rank)
+        offset_y_data = offset_y_data.to(rank)
+        z_data = z_data.to(rank)
+        image_gt_segment = image_gt_segment.to(rank)
+        image_gt_instance = image_gt_instance.to(rank)
         
         # input_data: [8, 3, 576, 1024]
         # gt_seg_data: [8, 1, 200, 48] (bev)
@@ -112,29 +126,36 @@ def train_epoch(model, dataset, optimizer, configs, epoch):
             print(idx, loss_iter)
 
 
-def worker_function(config_file, gpu_id, checkpoint_path=None):
+def worker_function(rank, gpu_id, checkpoint_path=None):
     print('use gpu ids is '+','.join([str(i) for i in gpu_id]))
-    configs = load_config_module(config_file)
-
+    # name = config_file.split(".py")[0].replace("/", ".")
+    # configs = load_config_module(name, config_file)
+    setup(rank, torch.cuda.device_count())
     ''' models and optimizer '''
-    model = configs.model()
+    model = br_model()
     model = Combine_Model_and_Loss(model)
-    if torch.cuda.is_available():
-        model = model.cuda()
-    model = torch.nn.DataParallel(model)
-    optimizer = configs.optimizer(filter(lambda p: p.requires_grad, model.parameters()), **configs.optimizer_params)
-    scheduler = getattr(configs, "scheduler", CosineAnnealingLR)(optimizer, configs.epochs)
-    if checkpoint_path:
-        if getattr(configs, "load_optimizer", True):
-            resume_training(checkpoint_path, model.module, optimizer, scheduler)
-        else:
-            load_checkpoint(checkpoint_path, model.module, None)
+    # if torch.cuda.is_available():
+    #     model = model.cuda()
+    model.to(rank)
+    model.train()
+    if multiGPU == True:
+        model = nn.parallel.DistributedDataParallel(model, device_ids=[rank])
+    else:
+        model = torch.nn.DataParallel(model)
+    optimizer = br_optimizer(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
+    scheduler = CosineAnnealingLR(optimizer, epochs)
+    # if checkpoint_path:
+    #     if getattr(configs, "load_optimizer", True):
+    #         resume_training(checkpoint_path, model.module, optimizer, scheduler)
+    #     else:
+    #         load_checkpoint(checkpoint_path, model.module, None)
 
     ''' dataset '''
-    Dataset = getattr(configs, "train_dataset", None)
-    if Dataset is None:
-        Dataset = configs.training_dataset
-    train_loader = DataLoader(Dataset(), **configs.loader_args, pin_memory=True)
+    Dataset = train_dataset # getattr(configs, "train_dataset", None)
+    # if Dataset is None:
+    #     Dataset = configs.training_dataset
+    dataset = Dataset()
+    train_loader = DataLoader(dataset, **loader_args, sampler = torch.utils.data.distributed.DistributedSampler(dataset), pin_memory=True)
 
     ''' get validation '''
     # if configs.with_validation:
@@ -146,16 +167,25 @@ def worker_function(config_file, gpu_id, checkpoint_path=None):
     #         print(loss_mean)
     #         return
 
-    for epoch in range(configs.epochs):
+    for epoch in range(epochs):
         print('*' * 100, epoch)
-        train_epoch(model, train_loader, optimizer, configs, epoch)
+        train_epoch(model, train_loader, optimizer, epoch, rank)
         scheduler.step()
-        save_model_dp(model, optimizer, configs.model_save_path, 'ep%03d.pth' % epoch)
-        save_model_dp(model, None, configs.model_save_path, 'latest.pth')
+        save_model_dp(model, optimizer, model_save_path, 'ep%03d.pth' % epoch)
+        save_model_dp(model, None, model_save_path, 'latest.pth')
 
 
 # TODO template config file.
 if __name__ == '__main__':
     import warnings
     warnings.filterwarnings("ignore")
-    worker_function('./clbev/tools/breadcrumbs_config.py', gpu_id=[0,1])
+    config_file = './clbev/tools/breadcrumbs_config.py'
+    configs = load_config_module(config_file)
+    # import pickle
+    # with open("config_save", "wb") as f:
+    #     pickle.dump(configs, f)
+    mp.spawn(worker_function,
+            args=([0,1],),
+            nprocs=torch.cuda.device_count(),
+            join=True)
+    # worker_function('./clbev/tools/breadcrumbs_config.py', gpu_id=[0,1])

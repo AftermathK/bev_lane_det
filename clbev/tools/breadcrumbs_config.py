@@ -52,10 +52,10 @@ def custom_collate(batch):
 # train_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
 # test_txt_paths = '/mnt/00B0Aj680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
 # data_base_path = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/val'
-train_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/labels-v4/test'
-test_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/labels-v4/test'
-data_base_path = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/test'
-model_save_path = "/home/dfpazr/Documents/CogRob/avl/DSM/network_estimation/CenterlineNetworks/clbev/checkpoints"
+train_txt_paths = '/media/Data/argoverse2/labels/labels-v5-semantics/train'
+test_txt_paths = '/media/Data/argoverse2/labels/labels-v5-semantics/val'
+data_base_path = '/media/Data/argoverse2/train'
+model_save_path = "/home/centerline/cl_bev_lane_det/clbev/checkpoints"
 
 input_shape = (576,1024)
 output_2d_shape = (144,256)
@@ -71,7 +71,7 @@ bev_shape = (int((x_range[1] - x_range[0]) / meter_per_pixel),int((y_range[1] - 
 loader_args = dict(
     batch_size=10,
     num_workers=12,
-    shuffle=True,
+    shuffle=False,
     collate_fn=custom_collate
 )
 
@@ -85,13 +85,14 @@ vc_config['vc_image_shape'] = (1920, 1080)
 
 
 ''' model '''
-def model():
+def br_model():
     return BEV_LaneDet(bev_shape=bev_shape, output_2d_shape=output_2d_shape,train=True)
 
 
 ''' optimizer '''
 epochs = 70
-optimizer = AdamW
+multiGPU = True
+br_optimizer = AdamW
 optimizer_params = dict(
     lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
     weight_decay=1e-2, amsgrad=False
