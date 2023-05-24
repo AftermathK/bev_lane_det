@@ -1,5 +1,5 @@
 import sys
-sys.path.append('/home/centerline/cl_bev_lane_det/clbev')
+sys.path.append('/naruarjun-central/cl_bev_lane_det/clbev')
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
@@ -21,7 +21,7 @@ def setup(rank, world_size):
     os.environ['MASTER_PORT'] = '12355'
 
     # initialize the process group
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    dist.init_process_group("gloo", rank=rank, world_size=world_size)
 
 def cleanup():
     dist.destroy_process_group()
@@ -76,13 +76,13 @@ def train_epoch(model, dataset, optimizer, epoch, rank):
             dataset):
 
         # loss_back, loss_iter = forward_on_cuda(gpu, gt_data, input_data, loss, models)
-        input_data = input_data.to(rank) # .cuda()
-        gt_seg_data = gt_seg_data.to(rank)
-        gt_emb_data = gt_emb_data.to(rank)
-        offset_y_data = offset_y_data.to(rank)
-        z_data = z_data.to(rank)
-        image_gt_segment = image_gt_segment.to(rank)
-        image_gt_instance = image_gt_instance.to(rank)
+        input_data = input_data.cuda(rank) # .cuda()
+        gt_seg_data = gt_seg_data.cuda(rank)
+        gt_emb_data = gt_emb_data.cuda(rank)
+        offset_y_data = offset_y_data.cuda(rank)
+        z_data = z_data.cuda(rank)
+        image_gt_segment = image_gt_segment.cuda(rank)
+        image_gt_instance = image_gt_instance.cuda(rank)
         
         # input_data: [8, 3, 576, 1024]
         # gt_seg_data: [8, 1, 200, 48] (bev)
@@ -136,14 +136,17 @@ def worker_function(rank, gpu_id, checkpoint_path=None):
     ''' models and optimizer '''
     model = br_model()
     model = Combine_Model_and_Loss(model)
+    print("Model Loaded")
     # if torch.cuda.is_available():
     #     model = model.cuda()
-    model.to(rank)
+    model.cuda(rank)
+    print("Model moved")
     model.train()
     if multiGPU == True:
         model = nn.parallel.DistributedDataParallel(model, device_ids=[rank])
     else:
         model = torch.nn.DataParallel(model)
+    print("Multi-GPU done")
     optimizer = br_optimizer(filter(lambda p: p.requires_grad, model.parameters()), **optimizer_params)
     scheduler = CosineAnnealingLR(optimizer, epochs)
     # if checkpoint_path:

@@ -124,6 +124,21 @@ def random_pick_generic(a, W):
         out = np.hstack([out, np.array([np.random.choice(a[L:])])])
     return out
 
+import sys
+import pdb
+class ForkedPdb(pdb.Pdb):
+    """A Pdb subclass that may be used
+    from a forked multiprocessing child
+
+    """
+    def interaction(self, *args, **kwargs):
+        _stdin = sys.stdin
+        try:
+            sys.stdin = open('/dev/stdin')
+            pdb.Pdb.interaction(self, *args, **kwargs)
+        finally:
+            sys.stdin = _stdin
+
 
 class KeypointLoader():
     def __init__(self, labels_path, sensor_path, split, skip=10):
@@ -136,8 +151,20 @@ class KeypointLoader():
         # self.train = "train/" if train else "val/" #Validation set's sensor folder should be reorganized
         #Create a list of dataset files
         self.dset_files = None # self.get_dataset_files(self.dset_path)
+        print("Loading pickle")
+        # pdb_temp = ForkedPdb()
+        # pdb_temp.set_trace()
         with open('av2-cli-dataset.pkl', 'rb') as f:
             self.dset_files = pickle.load(f)
+        print("Loaded Pickle")
+        
+        # new_dset_files = []
+        # for path in self.dset_files:
+        #     new_dset_files.append(path.replace("/media/Data/argoverse2/labels/labels-v5-semantics", "/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v3"))
+        
+        # self.dset_files = new_dset_files
+        
+        print(self.dset_files[0])
         
         # with open('av2-cli-dataset.pkl', 'wb') as f:
         #     pickle.dump(self.dset_files, f)
@@ -146,7 +173,9 @@ class KeypointLoader():
         self.image_shape = (512, 256) #Sticking to PiNet
 
         # for extracting additional AV2 data
-        self.av_loader = AV2SensorDataLoader(data_dir=Path(sensor_path), labels_dir=Path(sensor_path))
+        # self.av_loader = AV2SensorDataLoader(data_dir=Path(sensor_path), labels_dir=Path(sensor_path))
+        with open('av-loader.pkl', 'rb') as f:
+            self.av_loader = pickle.load(f)
 
         print("Dataset size: {}".format(len(self.dset_files)))
 

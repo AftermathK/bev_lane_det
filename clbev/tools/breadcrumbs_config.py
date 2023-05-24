@@ -52,10 +52,10 @@ def custom_collate(batch):
 # train_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
 # test_txt_paths = '/mnt/00B0Aj680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
 # data_base_path = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/val'
-train_txt_paths = '/media/Data/argoverse2/labels/labels-v5-semantics/train'
-test_txt_paths = '/media/Data/argoverse2/labels/labels-v5-semantics/val'
-data_base_path = '/media/Data/argoverse2/train'
-model_save_path = "/home/centerline/cl_bev_lane_det/clbev/checkpoints"
+train_txt_paths = '/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v5-semantics/train'
+test_txt_paths = '/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v5-semantics/val'
+data_base_path = '/cogrob-avl-dataset/argoverse2/sensor/train'
+model_save_path = "/naruarjun-central/cl_bev_lane_det/clbev/checkpoints"
 
 input_shape = (576,1024)
 output_2d_shape = (144,256)
