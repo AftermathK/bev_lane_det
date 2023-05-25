@@ -55,3 +55,45 @@ def bev_instance2points_with_offset_z(ids: np.ndarray, max_x=50, meter_per_pixal
     return points
 
 
+def mean_col_by_row(seg):
+    assert (len(seg.shape) == 2)
+
+    # optimize if already estimated
+    curr_id = 0
+    center_ids = np.unique(seg[seg > 0])
+    lines = []
+    for idx, cid in enumerate(center_ids):  # 一个id
+        cols, rows, z_val = [], [], []
+
+        for y_op in range(seg.shape[0]):  # Every row
+            condition = seg[y_op, :] == cid
+            x_op = np.where(condition)[0]  # All pos in this row
+            if x_op.size > 0:
+                x_op = np.mean(x_op)  # mean pos
+                cols.append(4*x_op)
+                rows.append(4*y_op)
+        lines.append((cols, rows, cid))
+    return lines
+
+def bev_instance2points(ids: np.ndarray, max_x=50):
+    center = ids.shape[1] / 2
+    lines = mean_col_by_row(ids)
+    points = []
+    # for i in range(1, ids.max()):
+    for y, x, cid in lines:  # cols, rows
+        # x, y = np.where(ids == 1)
+        x = np.array(x)[::-1]
+        y = np.array(y)[::-1]
+
+        if len(x) < 2:
+            continue
+        x = np.flip(x)
+        y = np.flip(y)
+        # c = interp1d(x, y, kind='cubic')
+        f_p = CubicSpline(x, y)
+        
+        x_p = np.linspace(x[0], x[-1])
+        y_p = f_p(x_p)
+        points.append((y_p, x_p, cid))
+    return lines, points
+
