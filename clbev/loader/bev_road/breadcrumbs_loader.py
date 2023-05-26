@@ -10,6 +10,7 @@ from utils.coord_util import ego2image,IPM2ego_matrix
 from utils.standard_camera_cpu import Standard_camera
 # from parameters import Parameters
 from loader.bev_road.textfileloader import KeypointLoader
+import matplotlib.pyplot as plt
 
 class Generator(Dataset):
     def __init__(self,
@@ -261,6 +262,9 @@ class Generator(Dataset):
             res_points = np.concatenate([ipm_points_, np.array([z])], axis=0)
             res_points_d[lane_idx+1] = res_points
 
+        plt.imshow(image_gt, 'gray')
+        plt.show()
+
         bev_gt,offset_y_map,z_map = self.get_y_offset_and_z(res_points_d)
 
         if "ring_front_center" in image_name:
@@ -278,12 +282,13 @@ class Generator(Dataset):
         :return:
         '''
         image, image_gt, bev_gt, offset_y_map, z_map, cam_extrinsics, cam_intrinsic = self.get_seg_offset(idx)
+        print(self.sample_data_loader.get_image_name(idx))
         orig_image = np.copy(image)
         transformed = self.trans_image(image=image)
         image = transformed["image"]
 
         ''' 2d gt'''
-        image_gt = cv2.resize(image_gt, (self.output2d_size[1],self.output2d_size[0]), interpolation=cv2.INTER_NEAREST)
+        image_gt = self.gt_resize(image_gt) # cv2.resize(image_gt, (self.output2d_size[1],self.output2d_size[0]), interpolation=cv2.INTER_NEAREST)
         image_gt_instance = torch.tensor(image_gt).unsqueeze(0)  # h, w, c
         image_gt_segment = torch.clone(image_gt_instance)
         image_gt_segment[image_gt_segment > 0] = 1
@@ -412,6 +417,16 @@ class Generator(Dataset):
         # return image, bev_gt_segment.float(), bev_gt_instance.float(),bev_gt_offset.float(),bev_gt_z.float(),image_gt_segment.float(),image_gt_instance.float()
 
         return (ret_dict)
+
+    def gt_resize(self, image_gt):
+        image_gt_resize = np.zeros((self.output2d_size[0],self.output2d_size[1]), dtype=np.uint8)
+        indices = np.argwhere(image_gt>0)
+        original_image_center = np.array([[(image_gt.shape[0]-1)/2, (image_gt.shape[1]-1)/2]])
+        scaled_image_center = np.array([[(self.output2d_size[0]-1)/2, (self.output2d_size[1]-1)/2]])
+        scale = np.array([[self.output2d_size[0]/image_gt.shape[0], self.output2d_size[1]/image_gt.shape[1]]])
+        mapped_indices = ((indices - original_image_center)*scale + scaled_image_center).astype(int)
+        image_gt_resize[mapped_indices[:,0], mapped_indices[:,1]] = image_gt[indices[:,0], indices[:,1]]
+        return image_gt_resize
 
     def get_keypoint_tensor(self, keypoints, class_ids, im_shape):
         # im_shape = (int(im_shape[0] / 8), int(im_shape[1]/8))
