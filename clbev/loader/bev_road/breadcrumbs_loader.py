@@ -22,6 +22,7 @@ class Generator(Dataset):
                  output_2d_shape,
                  virtual_camera_config,
                  vertical_center_cam_crop,
+                 semantics_config,
                  split="train",
                  sample_skip=10):
         super(Generator, self).__init__()
@@ -58,7 +59,7 @@ class Generator(Dataset):
         # self.sensor_root_dir = self.p.sensor_root_url
         # self.center_crop_min = self.p.center_crop_min
         # self.center_crop_max = self.p.center_crop_max
-        self.sample_data_loader = KeypointLoader(self.txt_file_path, self.sensor_root_dir, split, skip=sample_skip)
+        self.sample_data_loader = KeypointLoader(self.txt_file_path, self.sensor_root_dir, split, semantics_config, skip=sample_skip)
         self.num_classes = 4
 
 

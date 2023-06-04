@@ -56,6 +56,11 @@ train_txt_paths = '/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v5-semant
 test_txt_paths = '/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v5-semantics/val'
 data_base_path = '/cogrob-avl-dataset/argoverse2/sensor/train'
 model_save_path = "/naruarjun-central/cl_bev_lane_det/clbev/checkpoints"
+semantics_config = {}
+semantics_config["classes_to_ignore"] = ['construction', 'object', 'sky', 'nature', 'void']
+semantics_config["taint_classes"] = ['ground', 'sidewalk', 'parking', 'rail track']
+semantics_config["taint_categories"] = ['vehicle', 'human']
+semantics_config["semantic_threshold"] = 0.7
 
 input_shape = (576,1024)
 output_2d_shape = (144,256)
@@ -111,7 +116,7 @@ def train_dataset():
                     ])
     train_data = Generator(train_txt_paths, data_base_path, 
                            x_range, y_range, meter_per_pixel, 
-                           train_trans, output_2d_shape, vc_config, vertical_center_cam_crop, split="train", sample_skip=frame_skip)
+                           train_trans, output_2d_shape, vc_config, vertical_center_cam_crop, semantics_config, split="train", sample_skip=frame_skip)
 
     return train_data
 

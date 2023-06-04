@@ -140,12 +140,17 @@ class ForkedPdb(pdb.Pdb):
 
 
 class KeypointLoader():
-    def __init__(self, labels_path, sensor_path, split, skip=10):
+    def __init__(self, labels_path, sensor_path, split, semantics_config, skip=10):
         self.dset_path = labels_path 
         self.sensor_path = sensor_path
         self.data_skip = skip
         # self.transforms = transforms
         self.split = split
+        self.semantics_config = semantics_config
+        # self.semantics_config["classes_to_ignore"] = ['construction', 'object', 'sky', 'nature', 'void']
+        # self.semantics_config["taint_classes"] = ['ground', 'sidewalk', 'parking', 'rail track']
+        # self.semantics_config["taint_categories"] = ['vehicle', 'human']
+        # self.semantic_threshold = 0.7
 
         # self.train = "train/" if train else "val/" #Validation set's sensor folder should be reorganized
         #Create a list of dataset files
@@ -257,9 +262,9 @@ class KeypointLoader():
     def semantics_filter(self, keypoints, keypoints_classes, class_ids):
         filtered_kp = []
         filtered_classes = []
-        classes_to_ignore = ['construction', 'object', 'sky', 'nature', 'void']
-        taint_classes = ['ground', 'sidewalk', 'parking', 'rail track']
-        taint_categories = ['vehicle', 'human']
+        # classes_to_ignore = ['construction', 'object', 'sky', 'nature', 'void']
+        # taint_classes = ['ground', 'sidewalk', 'parking', 'rail track']
+        # taint_categories = ['vehicle', 'human']
         lanes_mask_dict = {"lanes_mask": [], "intra_lane_masks": []}
         lanes_mask = []
         intra_lane_masks = []
@@ -272,16 +277,16 @@ class KeypointLoader():
             intra_lane_mask = []
             for j in range(len(classes)):
                 current_label = labels[int(classes[j])]
-                if current_label.category in classes_to_ignore:
+                if current_label.category in self.semantics_config["classes_to_ignore"]:
                     tainted_points += 1
                     continue
-                elif current_label.name in taint_classes or current_label.category in taint_categories:
+                elif current_label.name in self.semantics_config["taint_classes"] or current_label.category in self.semantics_config["taint_categories"]:
                     tainted_points += 1
                 filtered_lane.append(lane[j])
                 intra_lane_mask.append(j)
 
             
-            if tainted_points / init_lane_length < 0.7:
+            if tainted_points / init_lane_length < self.semantics_config["semantic_threshold"]:
                 filtered_kp.append(np.array(filtered_lane))
                 filtered_classes.append(class_ids[i])
                 lanes_mask.append(i)
