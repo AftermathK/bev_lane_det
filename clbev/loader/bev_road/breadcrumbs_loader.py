@@ -10,7 +10,6 @@ from utils.coord_util import ego2image,IPM2ego_matrix
 from utils.standard_camera_cpu import Standard_camera
 # from parameters import Parameters
 from loader.bev_road.textfileloader import KeypointLoader
-import matplotlib.pyplot as plt
 
 class Generator(Dataset):
     def __init__(self,
@@ -262,9 +261,6 @@ class Generator(Dataset):
             res_points = np.concatenate([ipm_points_, np.array([z])], axis=0)
             res_points_d[lane_idx+1] = res_points
 
-        plt.imshow(image_gt, 'gray')
-        plt.show()
-
         bev_gt,offset_y_map,z_map = self.get_y_offset_and_z(res_points_d)
 
         if "ring_front_center" in image_name:
@@ -282,7 +278,6 @@ class Generator(Dataset):
         :return:
         '''
         image, image_gt, bev_gt, offset_y_map, z_map, cam_extrinsics, cam_intrinsic = self.get_seg_offset(idx)
-        print(self.sample_data_loader.get_image_name(idx))
         orig_image = np.copy(image)
         transformed = self.trans_image(image=image)
         image = transformed["image"]

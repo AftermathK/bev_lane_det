@@ -24,7 +24,6 @@ from av2.utils.typing import NDArrayByte
 from av2.map.lane_segment import LaneMarkType, LaneSegment
 from av2.utils.typing import NDArrayBool, NDArrayByte, NDArrayFloat, NDArrayInt
 from collections import namedtuple
-from tqdm import tqdm
 from copy import deepcopy
 import pickle
 
@@ -150,12 +149,12 @@ class KeypointLoader():
 
         # self.train = "train/" if train else "val/" #Validation set's sensor folder should be reorganized
         #Create a list of dataset files
-        self.dset_files = None # self.get_dataset_files(self.dset_path)
+        self.full_dset_files = None # self.get_dataset_files(self.dset_path)
         print("Loading pickle")
         # pdb_temp = ForkedPdb()
         # pdb_temp.set_trace()
         with open('av2-cli-dataset.pkl', 'rb') as f:
-            self.dset_files = pickle.load(f)
+            self.full_dset_files = pickle.load(f)
         print("Loaded Pickle")
         
         # new_dset_files = []
@@ -164,11 +163,11 @@ class KeypointLoader():
         
         # self.dset_files = new_dset_files
         
-        print(self.dset_files[0])
+        print(self.full_dset_files[0])
         
         # with open('av2-cli-dataset.pkl', 'wb') as f:
         #     pickle.dump(self.dset_files, f)
-        self.dset_files = random_pick_generic(np.array(self.dset_files), skip) # self.dset_files[::skip] #Adding skip to avoid consecuitve frame of data
+        self.dset_files = random_pick_generic(np.array(self.full_dset_files), skip) # self.dset_files[::skip] #Adding skip to avoid consecuitve frame of data
         self.cam_params = {} # dictionary of camera parameters
         self.image_shape = (512, 256) #Sticking to PiNet
 
@@ -178,6 +177,10 @@ class KeypointLoader():
             self.av_loader = pickle.load(f)
 
         print("Dataset size: {}".format(len(self.dset_files)))
+    
+    def reset_dset_files(self):
+        self.dset_files = random_pick_generic(np.array(self.full_dset_files), self.data_skip)
+
 
     def __len__(self):
         return len(self.dset_files)
@@ -331,7 +334,7 @@ class KeypointLoader():
 
         i=0
 
-        for root, _, files in tqdm(os.walk(path)):
+        for root, _, files in os.walk(path):
             for file in files:
                 if ".txt" in file:
                     i+=1
