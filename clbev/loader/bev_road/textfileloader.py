@@ -324,7 +324,7 @@ class KeypointLoader():
             #     continue
             keypoints.append(kp_list)
             i+=1
-        filtered_kp = [np.array([[lane[i], lane[i+1], lane[i+2]] for i in range(0, len(lane), 3) if lane[i] != -2.0]) for lane in keypoints]
+        filtered_kp = [np.array([[lane[i], lane[i+1], lane[i+2]] for i in range(0, len(lane), 3) if lane[i] != -2.0 or lane[i+1] != -2.0 or lane[i+2] != -2.0 ]) for lane in keypoints]
         filtered_kp_semantic = []
         if mask is not None:
             for i in range(len(mask["lanes_mask"])):
