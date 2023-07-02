@@ -52,14 +52,20 @@ def custom_collate(batch):
 # train_txt_paths = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
 # test_txt_paths = '/mnt/00B0Aj680755C4DFA/DevSpace/DSM/datasets/argoverse2/labels/sample-labels/val/04994d08-156c-3018-9717-ba0e29be8153'
 # data_base_path = '/mnt/00B0A680755C4DFA/DevSpace/DSM/datasets/argoverse2/val'
-train_txt_paths = '/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v5-semantics/train'
-test_txt_paths = '/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v5-semantics/val'
+train_txt_paths = '/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v5-semantics-mapillary/train'
+test_txt_paths = '/cogrob-avl-dataset/argoverse2/sensor/labels/labels-v5-semantics-mapillary/val'
 data_base_path = '/cogrob-avl-dataset/argoverse2/sensor/train'
-model_save_path = "/naruarjun-central/cl_bev_lane_det/clbev/checkpoints"
+model_save_path = "/naruarjun-central/cl_bev_lane_det_mapillary/clbev/checkpoints"
+# semantics_config = {}
+# semantics_config["classes_to_ignore"] = ['construction', 'object', 'sky', 'nature', 'void']
+# semantics_config["taint_classes"] = ['ground', 'sidewalk', 'parking', 'rail track']
+# semantics_config["taint_categories"] = ['vehicle', 'human']
+# semantics_config["semantic_threshold"] = 0.7
+
 semantics_config = {}
-semantics_config["classes_to_ignore"] = ['construction', 'object', 'sky', 'nature', 'void']
-semantics_config["taint_classes"] = ['ground', 'sidewalk', 'parking', 'rail track']
-semantics_config["taint_categories"] = ['vehicle', 'human']
+semantics_config["classes_to_ignore"] = ['Building']
+semantics_config["taint_classes"] = []
+semantics_config["taint_categories"] = ['Vehicle']
 semantics_config["semantic_threshold"] = 0.7
 
 input_shape = (576,1024)
